@@ -17,6 +17,8 @@
 //  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 //=============================================================================
 
+#include <iostream>
+#include <sstream>
 #include "config.h"
 #include "seq.h"
 #include "musescore.h"
@@ -30,6 +32,7 @@
 #include "libmscore/note.h"
 #include "libmscore/chord.h"
 #include "libmscore/tempo.h"
+#include "scoretab.h"
 #include "scoreview.h"
 #include "playpanel.h"
 #include "libmscore/staff.h"
@@ -65,6 +68,7 @@ static const int peakHoldTime = 1400;     // msec
 static const int peakHold     = (peakHoldTime * guiRefresh) / 1000;
 static OggVorbis_File vf;
 
+static long lastPlayedNoteOnUTick = -1;
 static constexpr int minUtickBufferSize = 480 * 4 * 10; // about 10 measures of 4/4 time signature
 
 #if 0 // yet(?) unused
@@ -575,7 +579,15 @@ void Seq::playEvent(const NPlayEvent& event, unsigned framePos)
                     return;
                 }
             }
-            putEvent(event, framePos);
+
+//            qDebug("Adding event: pitch=%d, velo=%d, ch=%d staff=%d", event.pitch(), event.velo(), event.channel(), event.getOriginatingStaff());
+            if (mscore->tutorRight() && event.channel() == 0 && event.getOriginatingStaff() == 0) {
+                tutor.addKey(event.pitch(), event.velo(), event.channel());
+            } else if (mscore->tutorLeft() && event.channel() == 0 && event.getOriginatingStaff() == 1) {
+                tutor.addKey(event.pitch(), event.velo(), event.channel());
+            } else {
+                putEvent(event, framePos);
+            }
         }
     } else if (type == ME_CONTROLLER || type == ME_PITCHBEND || type == ME_AFTERTOUCH || type == ME_POLYAFTER) {
         putEvent(event, framePos);
@@ -726,6 +738,59 @@ void Seq::addCountInClicks()
     countInPlayFrame = 0;
 }
 
+void Seq::tutorFutureEvents(EventMap::const_iterator it, EventMap::const_iterator it_end, unsigned framesPerPeriod)
+{
+    int i = 32;	// max number of events we're going through for look-ahead key presses
+    int endFrame = -1;
+    struct timespec ts_beg, ts_end;
+    timespec_get(&ts_beg, TIME_UTC);
+    while (it != it_end && i-- > 0) {
+        int playPosUTick = it->first;
+        if (mscore->loop()) {
+            int loopOutUTick = cs->repeatList().tick2utick(cs->loopOutTick().ticks());
+//            qDebug("playUTick: %d, loopOut: %d", playPosUTick, loopOutUTick);
+            if (playPosUTick >= loopOutUTick) {
+                break;
+            }
+        }
+        qreal playPosSeconds = cs->utick2utime(playPosUTick);
+        int playPosFrame = playPosSeconds * MScore::sampleRate;
+        //qDebug("endFrame: %d, playPosFrame: %d", endFrame, playPosFrame);
+        if (endFrame != -1 && playPosFrame > endFrame) {
+            break;
+        }
+        const NPlayEvent& event = it->second;
+        int type = event.type();
+        if (type == ME_NOTEON) {
+            bool mute = false;
+            const Note* note = event.note();
+
+            if (note) {
+                Staff* staff = note->staff();
+                Instrument* instr = staff->part()->instrument(note->chord()->tick());
+                const Channel* a = instr->channel(note->subchannel());
+                mute = a->mute() || a->soloMute() || !staff->playbackVoice(note->voice());
+            }
+
+            if (!mute && event.velo() > 0) {
+                //qDebug("Adding future event: pitch=%d, velo=%d, ch=%d", event.pitch(), event.velo(), event.channel());
+                if (mscore->tutorRight() && event.channel() == 0 && event.getOriginatingStaff() == 0) {
+                    tutor.addKey(event.pitch(), event.velo(), event.channel(), 1);
+                } else if (mscore->tutorLeft() && event.channel() == 0 && event.getOriginatingStaff() == 1) {
+                    tutor.addKey(event.pitch(), event.velo(), event.channel(), 1);
+                }
+
+                if (endFrame == -1) {
+                    endFrame = playPosFrame + framesPerPeriod;
+                }
+            }
+        }
+        ++it;
+    }
+    timespec_get(&ts_end, TIME_UTC);
+    //qDebug("elapsed: %ld us", (ts_end.tv_sec - ts_beg.tv_sec) * 1000000 + (ts_end.tv_nsec - ts_beg.tv_nsec) / 1000);
+}
+
 //-------------------------------------------------------------------
 //   process
 //    This function is called in a realtime context. This
@@ -744,6 +809,9 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
     if (driverState != state) {
         // Got a message from JACK Transport panel: Play
         if (state == Transport::STOP && driverState == Transport::PLAY) {
+            if (mscore->tutorAny()) {
+                tutor.clearKeys();
+            }
             if ((cachedPrefs.useJackMidi || cachedPrefs.useJackAudio) && !getAction("play")->isChecked()) {
                 // Do not play while editing elements
                 if (mscore->state() != STATE_NORMAL || !isRunning() || !canStart()) {
@@ -784,6 +852,9 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
         // Got a message from JACK Transport panel: Stop
         else if (state == Transport::PLAY && driverState == Transport::STOP) {
             state = Transport::STOP;
+            if (mscore->tutorAny()) {
+                tutor.clearKeys();
+            }
             // Muting all notes
             stopNotes(-1, true);
             initInstruments(true);
@@ -834,6 +905,14 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
         unsigned framePos = 0;     // frame currently being processed relative to the first frame of this call to Seq::process
         int periodEndFrame = *pPlayFrame + framesPerPeriod;     // the ending frame (relative to start of playback) of the period being processed by this call to Seq::process
         int scoreEndUTick = cs->repeatList().tick2utick(cs->lastMeasure()->endTick().ticks());
+        if (mscore->tutorAny() && tutor.size() > 0) {
+            if (framesRemain && cs->playMode() == PlayMode::SYNTHESIZER) {
+                //metronome(framesRemain, p, inCountIn);
+                _synti->process(framesRemain, p);
+                return;
+            }
+        }
+
         while (*pPlayPos != pEventsEnd) {
             int playPosUTick = (*pPlayPos)->first;
             int n;       // current frame (relative to start of playback) that is being synthesized
@@ -920,6 +999,9 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
             }
             const NPlayEvent& event = (*pPlayPos)->second;
             playEvent(event, framePos);
+            if (event.type() == ME_NOTEON) {
+                lastPlayedNoteOnUTick = (*pPlayPos)->first;
+            }
             if (event.type() == ME_TICK1) {
                 tickRemain = tickLength;
                 tickVolume = event.velo() ? qreal(event.value()) / 127.0 : 1.0;
@@ -970,6 +1052,9 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
             } else {
                 stopTransport();
             }
+            if (mscore->tutorAny()) {
+                tutorFutureEvents(*pPlayPos, pEventsEnd, framesPerPeriod);
+            }
         }
     } else {
         // Outside of playback mode
@@ -995,13 +1080,11 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
     qreal rv = 0.0f;
     p = buffer;
     for (unsigned i = 0; i < framesRemain; ++i) {
-        qreal val = *p;
+        qreal val = *p++;
         lv = qMax(lv, qAbs(val));
-        p++;
 
-        val = *p;
+        val = *p++;
         rv = qMax(rv, qAbs(val));
-        p++;
     }
     meterValue[0] = lv;
     meterValue[1] = rv;
@@ -1552,6 +1635,31 @@ void Seq::midiInputReady()
     }
 }
 
+void Seq::midiNoteReceived(int /*channel*/, int pitch, int velo) {
+//    qDebug("Got MIDI event: ch=%d, pitch=%d, vel=%d", channel, pitch, velo);
+    if (!mscore->tutorAny() || velo == 0)
+        return;
+
+    int future = tutor.keyPressed(pitch, velo);
+    if (future > 0) {
+        // speed-up execution jumping to future event playPos
+//        qDebug("Speeding up...");
+        for (auto it = playPos; it != events.end(); ++it) {
+            const NPlayEvent& event = it->second;
+            if (event.type() == ME_NOTEOFF || (event.type() == ME_NOTEON && event.velo() == 0)) {
+                tutor.clearKey(event.pitch());
+            }
+            else if (event.type() == ME_NOTEON && event.pitch() == pitch && event.velo() > 0) {
+                if (it->first > playPos->first) {
+//                    qDebug("Seeking to %d", it->first);
+                    seek(it->first);
+                }
+                break;
+            }
+        }
+    }
+}
+
 //---------------------------------------------------------
 //   SeqMsgFifo
 //---------------------------------------------------------
@@ -1788,7 +1896,10 @@ double Seq::curTempo() const
 void Seq::setLoopIn()
 {
     Fraction t;
-    if (state == Transport::PLAY) {       // If in playback mode, set the In position where note is being played
+    if (state == Transport::PLAY && lastPlayedNoteOnUTick != -1) {
+        t = Fraction::fromTicks(cs->repeatList().utick2tick(lastPlayedNoteOnUTick));
+    }
+    else if (state == Transport::PLAY) {       // If in playback mode, set the In position where note is being played
         auto ppos = playPos;
         if (ppos != events.cbegin()) {
             --ppos;                       // We have to go back one pos to get the correct note that has just been played

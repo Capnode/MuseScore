@@ -929,6 +929,8 @@
       </Toolbar>
     <Toolbar name="playbackControl">
       <action>midi-on</action>
+      <action>tutor-left</action>
+      <action>tutor-right</action>
       <action></action>
       <action>rewind</action>
       <action>play</action>
@@ -937,6 +939,6 @@
       <action>repeat</action>
       <action>pan</action>
       <action>metronome</action>
-      </Toolbar>
+    </Toolbar>
     </Workspace>
   </museScore>

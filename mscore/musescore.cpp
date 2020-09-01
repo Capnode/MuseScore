@@ -294,6 +294,8 @@ const std::list<const char*> MuseScore::_allFileOperationEntries {
 const std::list<const char*> MuseScore::_allPlaybackControlEntries {
 #ifdef HAS_MIDI
     "midi-on",
+    "tutor-left",
+    "tutor-right",
     "",
 #endif
     "rewind",
@@ -1160,6 +1162,8 @@ MuseScore::MuseScore()
     metronomeAction = getAction("metronome");
     countInAction   = getAction("countin");
     panAction       = getAction("pan");
+    tutorLeftAction = getAction("tutor-left");
+    tutorRightAction = getAction("tutor-right");
 
     _statusBar = new QStatusBar;
     _statusBar->addPermanentWidget(new QWidget(this), 2);
@@ -1301,6 +1305,9 @@ MuseScore::MuseScore()
 #ifdef HAS_MIDI
     a  = getAction("midi-on");
     a->setChecked(preferences.getBool(PREF_IO_MIDI_ENABLEINPUT));
+    bool midi = a->isChecked();
+    getAction("tutor-left")->setEnabled(midi);
+    getAction("tutor-right")->setEnabled(midi);
 #endif
 
     getAction("undo")->setEnabled(false);
@@ -3294,6 +3301,12 @@ void MuseScore::enableMidiIn(bool enable)
     const auto wasEnabled = isMidiInEnabled();
 
     preferences.setPreference(PREF_IO_MIDI_ENABLEINPUT, enable);
+    getAction("tutor-left")->setEnabled(enable);
+    getAction("tutor-right")->setEnabled(enable);
+    if (!enable) {
+        getAction("tutor-left")->setChecked(false);
+        getAction("tutor-right")->setChecked(false);
+    }
 
     if (enable && !wasEnabled) {
         restartAudioEngine();
@@ -3400,6 +3413,10 @@ void MuseScore::midiNoteReceived(int channel, int pitch, int velo)
     static int active = 0;
     static int iterDrums = 0;
     static int activeDrums = 0;
+
+    if (seq) {
+        seq->midiNoteReceived(channel, pitch, velo);
+    }
 
     if (!isMidiInEnabled()) {
         return;
@@ -4663,6 +4680,8 @@ void MuseScore::changeState(ScoreState val)
                 qDebug("disable synth control");
             }
             a->setEnabled(driver);
+        } else if (enable && (s->key() == "tutor-left" || s->key() == "tutor-right")) {
+            a->setEnabled((s->state() & val) && getAction("midi-on")->isChecked());
         } else {
             a->setEnabled(s->state() & val);
         }
@@ -6858,8 +6877,10 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
     } else if (cmd == "loop-out") {
         seq->setLoopOut();
         loopAction->setChecked(true);
-    } else if (cmd == "metronome") { // no action
-    } else if (cmd == "countin") {  // no action
+    } else if (cmd == "metronome"
+        || cmd == "countin"
+        || cmd == "tutor-left"
+        || cmd == "tutor-right") { // no action
     } else if (cmd == "lock") {
         if (_sstate == STATE_LOCK) {
             changeState(STATE_NORMAL);

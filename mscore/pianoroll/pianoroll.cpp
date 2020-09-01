@@ -68,6 +68,8 @@ PianorollEditor::PianorollEditor(QWidget* parent)
     tbMain->addSeparator();
 #ifdef HAS_MIDI
     tbMain->addAction(getAction("midi-on"));
+    tbMain->addAction(getAction("tutor-left"));
+    tbMain->addAction(getAction("tutor-right"));
 #endif
     tbMain->addSeparator();
 

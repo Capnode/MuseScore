@@ -3082,6 +3082,28 @@ Shortcut Shortcut::_sc[] = {
         ShortcutFlags::A_CHECKABLE
     },
     {
+        MsWidget::MAIN_WINDOW,
+        STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
+        "tutor-left",
+        QT_TRANSLATE_NOOP("action","Piano tutor left"),
+        QT_TRANSLATE_NOOP("action","Play left hand on MIDI keyboard"),
+        0,
+        Icons::hand_left_ICON,
+        Qt::WindowShortcut,
+        ShortcutFlags::A_CHECKABLE
+    },
+    {
+        MsWidget::MAIN_WINDOW,
+        STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
+        "tutor-right",
+        QT_TRANSLATE_NOOP("action","Piano tutor right"),
+        QT_TRANSLATE_NOOP("action","Play right hand on MIDI keyboard"),
+        0,
+        Icons::hand_right_ICON,
+        Qt::WindowShortcut,
+        ShortcutFlags::A_CHECKABLE
+    },
+    {
         MsWidget::SCORE_TAB,
         STATE_NORMAL | STATE_NOTE_ENTRY,
         "figured-bass",

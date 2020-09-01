@@ -49,6 +49,7 @@ enum class Icons : short {
     formatListUnordered_ICON, formatListOrdered_ICON,
     formatIndentMore_ICON, formatIndentLess_ICON,
     loop_ICON, loopIn_ICON, loopOut_ICON, metronome_ICON, countin_ICON,
+    hand_left_ICON, hand_right_ICON,
     vframe_ICON, hframe_ICON, tframe_ICON, fframe_ICON, measure_ICON, checkmark_ICON,
     mscz_ICON,
     helpContents_ICON, goHome_ICON, goPrevious_ICON, goNext_ICON, viewRefresh_ICON,

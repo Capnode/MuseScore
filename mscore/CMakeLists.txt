@@ -212,7 +212,7 @@ add_library(mscoreapp STATIC
       startcenter.h startupWizard.h stringutils.h svggenerator.h synthcontrol.h
       templateBrowser.h textcursor.h textpalette.h texttools.h timeline.h timesigproperties.h
       toolbarEditor.h toolbuttonmenu.h transposedialog.h realizeharmonydialog.h
-      tupletdialog.h updatechecker.h waveview.h webpage.h workspace.h
+      tupletdialog.h tutor.h updatechecker.h waveview.h webpage.h workspace.h
 
       recordbutton.h greendotbutton prefsdialog.h prefsdialog.cpp
       stringutils.h stringutils.cpp
@@ -246,7 +246,7 @@ add_library(mscoreapp STATIC
       workspacecombobox.cpp
       albummanager.cpp
       stafftextproperties.cpp splitstaff.cpp
-      tupletdialog.cpp
+      tupletdialog.cpp tutor.cpp
       articulationprop.cpp
       file.cpp keyb.cpp osc.cpp
       layer.cpp selectdialog.cpp selectnotedialog.cpp propertymenu.cpp shortcut.cpp

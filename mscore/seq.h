@@ -28,6 +28,7 @@
 
 #include "audio/midi/event.h"
 #include "audio/drivers/driver.h"
+#include "tutor.h"
 
 class QTimer;
 
@@ -111,6 +112,7 @@ class Seq : public QObject, public Sequencer
     Q_OBJECT
 
     mutable QMutex mutex;
+    Tutor tutor;
 
     MasterScore* cs;
     ScoreView* cv;
@@ -207,6 +209,11 @@ class Seq : public QObject, public Sequencer
 
     int getPlayStartUtick();
 
+    void tutorFutureEvents(
+        EventMap::const_iterator it,
+        EventMap::const_iterator it_end,
+        unsigned framesPerPeriod);
+
     inline QQueue<NPlayEvent>* liveEventQueue() { return &_liveEventQueue; }
 
 private slots:
@@ -296,6 +303,7 @@ public:
     unsigned getCurrentMillisecondTimestampWithLatency(unsigned framePos) const;
 
     void preferencesChanged() { cachedPrefs.update(); }
+    void midiNoteReceived(int channel, int pitch, int velo);
 };
 
 extern Seq* seq;
