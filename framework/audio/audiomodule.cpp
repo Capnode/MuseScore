@@ -30,6 +30,7 @@
 #include "internal/worker/audiothreadstreamworker.h"
 #include "internal/rpcmidisource.h"
 
+#include "ui/iuiengine.h"
 #include "devtools/audioenginedevtools.h"
 
 #ifdef Q_OS_LINUX
@@ -37,7 +38,7 @@
 #endif
 
 #ifdef Q_OS_WIN
-#include "internal/platform/win/winaudiodriver.h"
+#include "internal/platform/win/winmmdriver.h"
 #endif
 
 #ifdef Q_OS_MACOS
@@ -69,7 +70,7 @@ void AudioModule::registerExports()
 #endif
 
 #ifdef Q_OS_WIN
-    framework::ioc()->registerExport<IAudioDriver>(moduleName(), new WinAudioDriver());
+    framework::ioc()->registerExport<IAudioDriver>(moduleName(), new WinmmDriver());
 #endif
 
 #ifdef Q_OS_MACOS
@@ -80,6 +81,9 @@ void AudioModule::registerExports()
 void AudioModule::registerUiTypes()
 {
     qmlRegisterType<AudioEngineDevTools>("MuseScore.Audio", 1, 0, "AudioEngineDevTools");
+
+    //! NOTE No Qml, as it will be, need to uncomment
+    //framework::ioc()->resolve<framework::IUiEngine>(moduleName())->addSourceImportPath(mu4_audio_QML_IMPORT);
 }
 
 void AudioModule::onInit()
@@ -88,14 +92,12 @@ void AudioModule::onInit()
 
     s_rpcChannelInvoker = std::make_shared<mu::framework::Invoker>();
 
-    s_rpcChannelInvoker->onInvoked([]() {
-        //! NOTE Called from main thread
-        s_rpcChannel->process();
-    });
-
     s_rpcChannel->onWorkerQueueChanged([]() {
         //! NOTE Called from worker thread
-        s_rpcChannelInvoker->invoke();
+        s_rpcChannelInvoker->invoke([]() {
+            //! NOTE Called from main thread
+            s_rpcChannel->process();
+        });
     });
 
     s_worker->run();

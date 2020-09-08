@@ -24,14 +24,19 @@
 #include <QCoreApplication>
 
 #include "config.h"
+#include "settings.h"
 
 using namespace mu;
 using namespace mu::framework;
 
+static const std::string module_name("global");
+
+static const Settings::Key BACKUP_PATH(module_name, "application/backup/subfolder");
+
 io::path GlobalConfiguration::sharePath() const
 {
     if (m_sharePath.empty()) {
-        m_sharePath = io::pathFromQString(getSharePath());
+        m_sharePath = getSharePath();
     }
 
     return m_sharePath;
@@ -40,7 +45,7 @@ io::path GlobalConfiguration::sharePath() const
 io::path GlobalConfiguration::dataPath() const
 {
     if (m_dataPath.empty()) {
-        m_dataPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation).toStdString();
+        m_dataPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
     }
 
     return m_dataPath;
@@ -65,4 +70,19 @@ QString GlobalConfiguration::getSharePath() const
     return QString(INSTPREFIX "/share/" INSTALL_NAME);
 #endif
 #endif
+}
+
+io::path GlobalConfiguration::backupPath() const
+{
+    return settings()->value(BACKUP_PATH).toString();
+}
+
+bool GlobalConfiguration::useFactorySettings() const
+{
+    return false;
+}
+
+bool GlobalConfiguration::enableExperimental() const
+{
+    return false;
 }

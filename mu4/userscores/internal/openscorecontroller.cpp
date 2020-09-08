@@ -24,7 +24,7 @@
 
 using namespace mu;
 using namespace mu::userscores;
-using namespace mu::domain::notation;
+using namespace mu::notation;
 
 void OpenScoreController::init()
 {
@@ -90,7 +90,7 @@ io::path OpenScoreController::selectScoreFile(const QStringList& filter)
 
 void OpenScoreController::doOpenScore(const io::path& filePath)
 {
-    auto notation = notationCreator()->newNotation();
+    auto notation = notationCreator()->newMasterNotation();
     IF_ASSERT_FAILED(notation) {
         return;
     }
@@ -102,11 +102,11 @@ void OpenScoreController::doOpenScore(const io::path& filePath)
         return;
     }
 
-    if (!globalContext()->containsNotation(filePath)) {
-        globalContext()->addNotation(notation);
+    if (!globalContext()->containsMasterNotation(filePath)) {
+        globalContext()->addMasterNotation(notation);
     }
 
-    globalContext()->setCurrentNotation(notation);
+    globalContext()->setCurrentMasterNotation(notation);
 
     prependToRecentScoreList(filePath);
 
@@ -116,7 +116,7 @@ void OpenScoreController::doOpenScore(const io::path& filePath)
 void OpenScoreController::prependToRecentScoreList(io::path filePath)
 {
     QStringList recentScoreList = configuration()->recentScoreList().val;
-    QString path = QString::fromStdString(filePath);
+    QString path = filePath.toQString();
 
     if (recentScoreList.contains(path)) {
         recentScoreList.removeAll(path);

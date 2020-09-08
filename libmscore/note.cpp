@@ -895,7 +895,10 @@ int Note::tpc() const
 
 QString Note::tpcUserName(const int tpc, const int pitch, const bool explicitAccidental)
 {
-    const auto pitchStr = tpc2name(tpc, NoteSpellingType::STANDARD, NoteCaseType::AUTO, explicitAccidental);
+    const auto pitchStr
+        = qApp->translate("InspectorAmbitus",
+                          tpc2name(tpc, NoteSpellingType::STANDARD, NoteCaseType::AUTO, explicitAccidental).replace("b", "♭").replace("#",
+                                                                                                                                      "♯").toUtf8().constData());
     const auto octaveStr = QString::number(((pitch - static_cast<int>(tpc2alter(tpc))) / PITCH_DELTA_OCTAVE) - 1);
     return pitchStr + (explicitAccidental ? " " : "") + octaveStr;
 }
@@ -909,7 +912,7 @@ QString Note::tpcUserName(const bool explicitAccidental) const
     const auto playbackPitch = ppitch();
     const auto tpc1Str = tpcUserName(tpc1(), playbackPitch, explicitAccidental);
 
-    if ((tpc1() == tpc2()) || concertPitch()) {
+    if ((epitch() == ppitch()) || concertPitch()) {
         return tpc1Str;
     } else {
         // Return both the written pitch and the playback pitch since they currently differ.
@@ -2021,16 +2024,23 @@ Element* Note::drop(EditData& data)
         Chord* c      = toChord(e);
         Note* n       = c->upNote();
         Direction dir = c->stemDirection();
-        int t         = (staff2track(staffIdx()) + n->voice());
+        int t         = track(); // (staff2track(staffIdx()) + n->voice());
         score()->select(0, SelectType::SINGLE, 0);
         NoteVal nval;
         nval.pitch = n->pitch();
         nval.headGroup = n->headGroup();
-        Segment* seg = score()->setNoteRest(chord()->segment(), t, nval,
-                                            score()->inputState().duration().fraction(), dir);
-        ChordRest* cr = toChordRest(seg->element(t));
+        ChordRest* cr = nullptr;
+        if (data.modifiers & Qt::ShiftModifier) {
+            // add note to chord
+            score()->addNote(ch, nval);
+        } else {
+            // replace current chord
+            Segment* seg = score()->setNoteRest(ch->segment(), t, nval,
+                                                score()->inputState().duration().fraction(), dir);
+            cr = seg ? toChordRest(seg->element(t)) : nullptr;
+        }
         if (cr) {
-            score()->nextInputPos(cr, true);
+            score()->nextInputPos(cr, false);
         }
         delete e;
     }

@@ -84,6 +84,7 @@ private:
     bool _cutaway            { false };
     bool _showIfEmpty        { false };         ///< show this staff if system is empty and hideEmptyStaves is true
     bool _hideSystemBarLine  { false };         // no system barline if not preceded by staff with barline
+    bool _mergeMatchingRests { false };         // merge matching rests in multiple voices
     HideMode _hideWhenEmpty  { HideMode::AUTO };      // hide empty staves
 
     QColor _color            { MScore::defaultColor };
@@ -97,6 +98,7 @@ private:
     bool _playbackVoice[VOICES] { true, true, true, true };
 
     ChangeMap _velocities;           ///< cached value
+    ChangeMap _velocityMultiplications;         ///< cached value
     PitchList _pitchOffsets;        ///< cached value
 
     void fillBrackets(int);
@@ -180,6 +182,8 @@ public:
     void setHideSystemBarLine(bool val) { _hideSystemBarLine = val; }
     HideMode hideWhenEmpty() const { return _hideWhenEmpty; }
     void setHideWhenEmpty(HideMode v) { _hideWhenEmpty = v; }
+    bool mergeMatchingRests() const { return _mergeMatchingRests; }
+    void setMergeMatchingRests(bool val) { _mergeMatchingRests = val; }
 
     int barLineSpan() const { return _barLineSpan; }
     int barLineFrom() const { return _barLineFrom; }
@@ -236,6 +240,7 @@ public:
     //===========
 
     ChangeMap& velocities() { return _velocities; }
+    ChangeMap& velocityMultiplications() { return _velocityMultiplications; }
     PitchList& pitchOffsets() { return _pitchOffsets; }
 
     int pitchOffset(const Fraction& tick) { return _pitchOffsets.pitchOffset(tick.ticks()); }

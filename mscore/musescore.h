@@ -22,7 +22,7 @@
 
 #include "config.h"
 #include "globals.h"
-#include "singleapp/src/QtSingleApplication"
+#include "thirdparty/singleapp/src/QtSingleApplication"
 #include "updatechecker.h"
 #include "libmscore/musescoreCore.h"
 #include "libmscore/score.h"
@@ -601,6 +601,7 @@ public:
     void writeSettings();
     void play(Element* e) const;
     void play(Element* e, int pitch) const;
+    void moveControlCursor();
     bool loadPlugin(const QString& filename);
     QString createDefaultName() const;
     void startAutoSave();

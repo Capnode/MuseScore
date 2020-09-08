@@ -377,10 +377,15 @@ void ScoreView::objectPopup(const QPoint& pos, Element* obj)
         mscore->selectSimilarInRange(obj);
     } else if (cmd == "select-dialog") {
         mscore->selectElementDialog(obj);
-    } else if (cmd == "realize-chord-symbols") {
+    } else if (cmd == "realize-chord-symbols-dialog") {
         if (obj->isEditable()) {
+            // try to construct a reasonable selection
             if (obj->score()) {
-                obj->score()->select(obj, SelectType::ADD);
+                Score* score = obj->score();
+                if (score->selection().isRange()) {
+                    mscore->selectSimilarInRange(obj);
+                }
+                score->select(obj, SelectType::ADD);
             }
             mscore->realizeChordSymbols();
         }
@@ -646,7 +651,7 @@ void ScoreView::moveCursor(const Fraction& tick)
     _cursor->setRect(QRectF(x, y, w, h));
     update(_matrix.mapRect(_cursor->rect()).toRect().adjusted(-1,-1,1,1));
 
-    if (_score->layoutMode() == LayoutMode::LINE) {
+    if (_score->layoutMode() == LayoutMode::LINE && seq->isPlaying() && panSettings().enabled) {
         moveControlCursor(tick);
     }
 
@@ -722,7 +727,7 @@ void ScoreView::moveControlCursor(const Fraction& tick)
             }
         }
         _timeElapsed += addition;
-    } else { // reposition the cursor when the score is not playing
+    } else { // reposition the cursor when distance is too great
         double curOffset = _cursor->rect().x() - score()->firstMeasure()->pos().x();
         double length = score()->lastMeasure()->pos().x() - score()->firstMeasure()->pos().x();
         _timeElapsed = (curOffset / length) * score()->durationWithoutRepeats() * 1000;
@@ -779,6 +784,23 @@ bool ScoreView::isCursorDistanceReasonable()
     }
 
     return true;
+}
+
+//---------------------------------------------------------
+//   moveControlCursorNearCursor
+///     used to position the control cursor correctly
+///     when starting playback
+//---------------------------------------------------------
+
+void ScoreView::moveControlCursorNearCursor()
+{
+    double curOffset = _cursor->rect().x() - score()->firstMeasure()->pos().x();
+    double length = score()->lastMeasure()->pos().x() - score()->firstMeasure()->pos().x();
+    _timeElapsed = (curOffset / length) * score()->durationWithoutRepeats() * 1000;
+    qreal x = score()->firstMeasure()->pos().x() + (score()->lastMeasure()->pos().x() - score()->firstMeasure()->pos().x())
+              * (_timeElapsed / (score()->durationWithoutRepeats() * 1000));
+    x -= score()->spatium();
+    _controlCursor->setRect(QRectF(x, _cursor->rect().y(), _cursor->rect().width(), _cursor->rect().height()));
 }
 
 //---------------------------------------------------------
@@ -2823,7 +2845,7 @@ void ScoreView::cmd(const char* s)
                 QAction* a = getAction(cmd);
                 if (cv->score()->styleB(Sid::concertPitch) != a->isChecked()) {
                     cv->score()->startCmd();
-                    cv->score()->cmdConcertPitchChanged(a->isChecked(), true);
+                    cv->score()->cmdConcertPitchChanged(a->isChecked());
                     cv->score()->endCmd();
                 }
             } },
@@ -3633,7 +3655,7 @@ void ScoreView::adjustCanvasPosition(const Element* el, bool playBack, int staff
 
         qreal xo = 0.0;      // new x offset
         QRectF curPos = playBack ? _cursor->rect() : el->canvasBoundingRect();
-        if (_score->layoutMode() == LayoutMode::LINE && seq->isPlaying()) {
+        if (playBack && _cursor && seq->isPlaying() && panSettings().enabled) {
             curPos = _controlCursor->rect();
         }
         // keep current note in view as well if applicable (note input mode)
@@ -5655,6 +5677,9 @@ void ScoreView::moveViewportToLastEdit()
     if (!mb) {
         mb = sc->tick2measureMM(st.startTick());
     }
+    if (!mb) {
+        return;
+    }
 
     const Element* viewportElement
         = (editElement && editElement->bbox().isValid() && !mb->isMeasure()) ? editElement : mb;
@@ -5669,6 +5694,7 @@ void ScoreView::moveViewportToLastEdit()
 
 void SmoothPanSettings::loadFromPreferences()
 {
+    enabled = preferences.getBool(PREF_PAN_SMOOTHLY_ENABLED);
     controlModifierBase = preferences.getDouble(PREF_PAN_MODIFIER_BASE);
     if (mscore->currentScoreView() != nullptr) {
         mscore->currentScoreView()->_controlModifier = controlModifierBase;

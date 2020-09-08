@@ -20,8 +20,10 @@
 #include <QtTest/QtTest>
 #include "mtest/testutils.h"
 #include "mscore/musescore.h"
-#include "mu4/scenes/palette/internal/palette/paletteworkspace.h"
+#include "mu4/palette/internal/palette/paletteworkspace.h"
 #include "mscore/workspace.h"
+
+#include "globalmodule.h"
 
 #define DIR QString("mscore/workspaces/")
 
@@ -80,6 +82,10 @@ void TestWorkspaces::initTestCase()
     qSetMessagePattern("%{function}: %{message}");
     // Force INI settings format to store settings in a temporary directory
     QSettings::setDefaultFormat(QSettings::IniFormat);
+
+    mu::framework::GlobalModule global;
+    global.registerExports();
+
     MScore::noGui = true;
     MScore::testMode = true;
     initMuseScoreResources();

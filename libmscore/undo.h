@@ -43,8 +43,6 @@
 
 #include "audio/midi/midipatch.h"
 
-Q_DECLARE_LOGGING_CATEGORY(undoRedo);
-
 namespace Ms {
 class ElementList;
 class Element;
@@ -657,12 +655,13 @@ class ChangeStaff : public UndoCommand
     bool showIfEmpty;
     bool cutaway;
     bool hideSystemBarLine;
+    bool mergeMatchingRests;
 
     void flip(EditData*) override;
 
 public:
     ChangeStaff(Staff*, bool invisible, ClefTypeList _clefType, qreal userDist, Staff::HideMode _hideMode,bool _showIfEmpty, bool _cutaway,
-                bool hide);
+                bool hide, bool mergeRests);
     UNDO_NAME("ChangeStaff")
 };
 

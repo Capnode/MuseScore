@@ -33,11 +33,23 @@ enum class Err {
     SoundFontNotLoaded = 602,
     SoundFontFailedLoad = 603,
     SoundFontFailedUnload = 604,
+
+    // midiport
+    MidiInvalidDeviceID = 620,
+    MidiFailedConnect = 621,
+    MidiNotConnected = 622,
+    MidiNotSupported = 623,
+    MidiSendError = 624
 };
 
 inline Ret make_ret(Err e)
 {
     return Ret(static_cast<int>(e));
+}
+
+inline Ret make_ret(Err e, const std::string& text)
+{
+    return Ret(static_cast<int>(e), text);
 }
 }
 }

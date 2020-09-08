@@ -1206,7 +1206,7 @@ void EditStyle::setSwingParams(bool checked)
 
 void EditStyle::concertPitchToggled(bool checked)
 {
-    cs->cmdConcertPitchChanged(checked, true);
+    cs->cmdConcertPitchChanged(checked);
 }
 
 //---------------------------------------------------------

@@ -19,10 +19,12 @@
 
 #include "modulessetup.h"
 #include "config.h"
+#include "runtime.h"
 
 #include "framework/global/globalmodule.h"
 #include "framework/ui/uimodule.h"
 #include "framework/uicomponents/uicomponentsmodule.h"
+#include "framework/fonts/fontsmodule.h"
 #include "framework/actions/actionsmodule.h"
 #include "framework/shortcuts/shortcutsmodule.h"
 #include "framework/workspace/workspacemodule.h"
@@ -36,15 +38,18 @@
 #include "mu4/userscores/userscoresmodule.h"
 #include "mu4/extensions/extensionsmodule.h"
 #include "mu4/languages/languagesmodule.h"
-#include "mu4/domain/notation/notationdomainmodule.h"
-#include "mu4/domain/importexport/importexportmodule.h"
-#include "mu4/scenes/common/commonscenemodule.h"
-#include "mu4/scenes/notation/notationscenemodule.h"
-#include "mu4/scenes/palette/palettemodule.h"
-#include "mu4/domain/importexport/importexportmodule.h"
-#include "mu4/scenes/inspector/inspectormodule.h"
-#include "mu4/scenes/playback/playbackmodule.h"
-#include "mu4/scenes/instruments/instrumentsmodule.h"
+#include "mu4/notation/notationmodule.h"
+#include "mu4/importexport/importexportmodule.h"
+#include "mu4/importexport/importexportmodule.h"
+#include "mu4/commonscene/commonscenemodule.h"
+#include "mu4/palette/palettemodule.h"
+#include "mu4/inspector/inspectormodule.h"
+#include "mu4/playback/playbackmodule.h"
+#include "mu4/instruments/instrumentsmodule.h"
+
+#ifdef BUILD_VST
+#include "framework/vst/vstmodule.h"
+#endif
 
 #ifdef BUILD_TELEMETRY_MODULE
 #include "framework/telemetry/telemetrysetup.h"
@@ -61,6 +66,12 @@
 ModulesSetup::ModulesSetup()
 {
     m_modulesSetupList
+        << new mu::framework::GlobalModule()
+        << new mu::framework::UiModule()
+        << new mu::framework::UiComponentsModule()
+        << new mu::fonts::FontsModule()
+        << new mu::framework::SystemModule()
+        << new mu::framework::NetworkModule()
 #ifdef BUILD_UI_MU4
         << new mu::actions::ActionsModule()
         << new mu::appshell::AppShellModule()
@@ -73,11 +84,13 @@ ModulesSetup::ModulesSetup()
         << new mu::userscores::UserScoresModule()
         << new mu::extensions::ExtensionsModule()
         << new mu::languages::LanguagesModule()
-        << new mu::domain::notation::NotationDomainModule()
-        << new mu::scene::common::CommonSceneModule()
-        << new mu::scene::notation::NotationSceneModule()
-        << new mu::scene::playback::PlaybackModule()
-        << new mu::scene::instruments::InstrumentsModule()
+        << new mu::notation::NotationModule()
+        << new mu::commonscene::CommonSceneModule()
+        << new mu::playback::PlaybackModule()
+        << new mu::instruments::InstrumentsModule()
+#ifdef BUILD_VST
+        << new mu::vst::VSTModule()
+#endif
 #endif
 
 #ifdef BUILD_TELEMETRY_MODULE
@@ -86,14 +99,9 @@ ModulesSetup::ModulesSetup()
 #ifdef AVSOMR
         << new Ms::Avs::AvsOmrSetup()
 #endif
-        << new mu::framework::GlobalModule()
-        << new mu::framework::UiModule()
-        << new mu::framework::UiComponentsModule()
-        << new mu::framework::SystemModule()
-        << new mu::framework::NetworkModule()
-        << new mu::domain::importexport::ImportExportModule()
-        << new mu::scene::inspector::InspectorModule()
-        << new mu::scene::palette::PaletteModule()
+        << new mu::importexport::ImportExportModule()
+        << new mu::inspector::InspectorModule()
+        << new mu::palette::PaletteModule()
     ;
 }
 
@@ -103,6 +111,13 @@ ModulesSetup::ModulesSetup()
 
 void ModulesSetup::setup()
 {
+    mu::runtime::mainThreadId(); //! NOTE Needs only call
+    mu::runtime::setThreadName("main");
+
+    for (mu::framework::IModuleSetup* m : m_modulesSetupList) {
+        m->registerResources();
+    }
+
     for (mu::framework::IModuleSetup* m : m_modulesSetupList) {
         m->registerExports();
     }
@@ -110,7 +125,6 @@ void ModulesSetup::setup()
     for (mu::framework::IModuleSetup* m : m_modulesSetupList) {
         m->registerUiTypes();
         m->resolveImports();
-        m->registerResources();
     }
 
     for (mu::framework::IModuleSetup* m : m_modulesSetupList) {

@@ -58,10 +58,8 @@ public:
     void seek(float sec) override;
     void stop() override;
 
-    float getAudio(float sec, float* buf, unsigned int samples) override;
+    float getAudio(float sec, float* buf, unsigned int samples, Context* ctx = nullptr) override;
     bool hasEnded() const override;
-
-    tick_t playTick() const override;
 
     float playbackSpeed() const override;
     void setPlaybackSpeed(float speed) override;
@@ -72,10 +70,10 @@ public:
 
 private:
 
-    void process(float sec);
+    void process(float sec, Context* ctx);
 
     void reset();
-    uint32_t maxTick(const Events& events) const;
+    tick_t validChunkTick(tick_t fromTick, const Chunks& chunks, tick_t maxDistanceTick) const;
     bool sendEvents(tick_t fromTick, tick_t toTick);
 
     std::shared_ptr<ISynthesizer> determineSynthesizer(channel_t ch, const std::map<channel_t, std::string>& synthmap) const;
@@ -90,21 +88,21 @@ private:
     bool hasTrack(track_t num) const;
 
     void requestData(tick_t tick);
-    void onDataReceived(const MidiData& data);
-    void onStreamClosed();
+    void onChunkReceived(const Chunk& chunk);
 
     Status m_status = Stoped;
 
+    std::mutex m_dataMutex;
     MidiData m_midiData;
     std::shared_ptr<MidiStream> m_midiStream;
 
     float m_playSpeed = 1.0;
 
-    uint64_t m_prevMSec = 0;
-    uint64_t m_curMSec = 0;
+    msec_t m_prevMSec = 0;
+    msec_t m_curMSec = 0;
 
     bool m_isPlayTickSet = false;
-    tick_t m_playTick = 0;    //! NOTE First NOTE_ON event tick
+    tick_t m_playTick = 0;    //! NOTE First event tick
 
     struct TempoItem {
         tempo_t tempo = 500000;
@@ -115,8 +113,8 @@ private:
     std::map<uint64_t /*msec*/, TempoItem> m_tempoMap;
 
     struct StreamState {
-        bool requested = false;
-        bool closed = false;
+        std::atomic<bool> requested{ false };
+        void reset() { requested = false; }
     };
     StreamState m_streamState;
 

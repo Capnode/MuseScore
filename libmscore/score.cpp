@@ -281,7 +281,7 @@ void MeasureBaseList::fixupSystems()
 //---------------------------------------------------------
 
 Score::Score()
-    : ScoreElement(this), _selection(this), _selectionFilter(this)
+    : ScoreElement(this), _headersText(MAX_HEADERS, nullptr), _footersText(MAX_FOOTERS, nullptr), _selection(this), _selectionFilter(this)
 {
     Score::validScores.insert(this);
     _masterScore = 0;
@@ -704,6 +704,10 @@ void Score::dragPosition(const QPointF& p, int* rst, Segment** seg, qreal spacin
 void Score::setShowInvisible(bool v)
 {
     _showInvisible = v;
+    // BSP tree does not include elements which are not
+    // displayed, so we need to refresh it to get
+    // invisible elements displayed or properly hidden.
+    rebuildBspTree();
     setUpdateAll();
 }
 
@@ -800,6 +804,7 @@ void MasterScore::setPlaylistDirty()
 {
     _playlistDirty = true;
     _repeatList->setScoreChanged();
+    _repeatList2->setScoreChanged();
 }
 
 //---------------------------------------------------------
@@ -974,7 +979,8 @@ Page* Score::searchPage(const QPointF& p) const
 ///   \returns List of found systems.
 //---------------------------------------------------------
 
-QList<System*> Score::searchSystem(const QPointF& pos, const System* preferredSystem, qreal spacingFactor) const
+QList<System*> Score::searchSystem(const QPointF& pos, const System* preferredSystem, qreal spacingFactor,
+                                   qreal preferredSpacingFactor) const
 {
     QList<System*> systems;
     Page* page = searchPage(pos);
@@ -998,14 +1004,16 @@ QList<System*> Score::searchSystem(const QPointF& pos, const System* preferredSy
         if ((ii == n) || (ns == 0)) {
             y2 = page->height();
         } else {
+            qreal currentSpacingFactor;
             qreal sy2 = s->y() + s->bbox().height();
             if (s == preferredSystem) {
-                y2 = ns->y();
+                currentSpacingFactor = preferredSpacingFactor; //y2 = ns->y();
             } else if (ns == preferredSystem) {
-                y2 = sy2;
+                currentSpacingFactor = 1.0 - preferredSpacingFactor; //y2 = sy2;
             } else {
-                y2 = sy2 + (ns->y() - sy2) * spacingFactor;
+                currentSpacingFactor = spacingFactor;
             }
+            y2 = sy2 + (ns->y() - sy2) * currentSpacingFactor;
         }
         if (y < y2) {
             systems.append(s);
@@ -1028,9 +1036,9 @@ QList<System*> Score::searchSystem(const QPointF& pos, const System* preferredSy
 ///   space to measures in this system when searching.
 //---------------------------------------------------------
 
-Measure* Score::searchMeasure(const QPointF& p, const System* preferredSystem, qreal spacingFactor) const
+Measure* Score::searchMeasure(const QPointF& p, const System* preferredSystem, qreal spacingFactor, qreal preferredSpacingFactor) const
 {
-    QList<System*> systems = searchSystem(p, preferredSystem, spacingFactor);
+    QList<System*> systems = searchSystem(p, preferredSystem, spacingFactor, preferredSpacingFactor);
     for (System* system : systems) {
         qreal x = p.x() - system->canvasPos().x();
         for (MeasureBase* mb : system->measures()) {
@@ -1120,7 +1128,24 @@ static Segment* getNextValidInputSegment(Segment* s, int track, int voice)
 
 bool Score::getPosition(Position* pos, const QPointF& p, int voice) const
 {
-    Measure* measure = searchMeasure(p);
+    System* preferredSystem = nullptr;
+    int preferredStaffIdx = -1;
+    const qreal spacingFactor = 0.5;
+    const qreal preferredSpacingFactor = 0.75;
+    if (noteEntryMode() && inputState().staffGroup() != StaffGroup::TAB) {
+        // for non-tab staves, prefer the current system & staff
+        // this makes it easier to add notes far above or below the staff
+        // not helpful for tab since notes are not entered above or below
+        Segment* seg = inputState().segment();
+        if (seg) {
+            preferredSystem = seg->system();
+        }
+        int track = inputState().track();
+        if (track >= 0) {
+            preferredStaffIdx = track >> 2;
+        }
+    }
+    Measure* measure = searchMeasure(p, preferredSystem, spacingFactor, preferredSpacingFactor);
     if (measure == 0) {
         return false;
     }
@@ -1143,6 +1168,7 @@ bool Score::getPosition(Position* pos, const QPointF& p, int voice) const
         if (!ss->show()) {
             continue;
         }
+        int nidx = -1;
         SysStaff* nstaff = 0;
 
         // find next visible staff
@@ -1156,12 +1182,23 @@ bool Score::getPosition(Position* pos, const QPointF& p, int voice) const
                 nstaff = 0;
                 continue;
             }
+            if (i == preferredStaffIdx) {
+                nidx = i;
+            }
             break;
         }
 
         if (nstaff) {
+            qreal currentSpacingFactor;
+            if (pos->staffIdx == preferredStaffIdx) {
+                currentSpacingFactor = preferredSpacingFactor;
+            } else if (nidx == preferredStaffIdx) {
+                currentSpacingFactor = 1.0 - preferredSpacingFactor;
+            } else {
+                currentSpacingFactor = spacingFactor;
+            }
             qreal s1y2 = ss->bbox().bottom();
-            sy2        = system->page()->canvasPos().y() + s1y2 + (nstaff->bbox().y() - s1y2) * .5;
+            sy2        = system->page()->canvasPos().y() + s1y2 + (nstaff->bbox().y() - s1y2) * currentSpacingFactor;
         } else {
             sy2 = system->page()->canvasPos().y() + system->page()->height() - system->pagePos().y();         // system->height();
         }
@@ -1226,7 +1263,8 @@ bool Score::getPosition(Position* pos, const QPointF& p, int voice) const
     qreal lineDist = s->staffType(tick)->lineDistance().val() * (s->isTabStaff(measure->tick()) ? 1 : .5) * mag
                      * spatium();
 
-    pos->line  = lrint((pppp.y() - sstaff->bbox().y()) / lineDist);
+    const qreal yOff = sstaff->yOffset();  // Get system staff vertical offset (usually for 1-line staves)
+    pos->line  = lrint((pppp.y() - sstaff->bbox().y() - yOff) / lineDist);
     if (s->isTabStaff(measure->tick())) {
         if (pos->line < -1 || pos->line > s->lines(tick) + 1) {
             return false;
@@ -1893,6 +1931,7 @@ void MasterScore::setExpandRepeats(bool expand)
 void MasterScore::updateRepeatListTempo()
 {
     _repeatList->updateTempo();
+    _repeatList2->updateTempo();
 }
 
 //---------------------------------------------------------
@@ -1903,6 +1942,16 @@ const RepeatList& MasterScore::repeatList() const
 {
     _repeatList->update(_expandRepeats);
     return *_repeatList;
+}
+
+//---------------------------------------------------------
+//   repeatList2
+//---------------------------------------------------------
+
+const RepeatList& MasterScore::repeatList2() const
+{
+    _repeatList2->update(false);
+    return *_repeatList2;
 }
 
 //---------------------------------------------------------
@@ -2141,7 +2190,7 @@ bool Score::appendScore(Score* score, bool addPageBreak, bool addSectionBreak)
 
     // match concert pitch states
     if (styleB(Sid::concertPitch) != score->styleB(Sid::concertPitch)) {
-        score->cmdConcertPitchChanged(styleB(Sid::concertPitch), true);
+        score->cmdConcertPitchChanged(styleB(Sid::concertPitch));
     }
 
     // clone the measures
@@ -2790,7 +2839,7 @@ void Score::sortStaves(QList<int>& dst)
 //   cmdConcertPitchChanged
 //---------------------------------------------------------
 
-void Score::cmdConcertPitchChanged(bool flag, bool /*useDoubleSharpsFlats*/)
+void Score::cmdConcertPitchChanged(bool flag)
 {
     undoChangeStyleVal(Sid::concertPitch, flag);         // change style flag
 
@@ -3310,7 +3359,7 @@ void Score::selectRange(Element* e, int staffIdx)
                 }
                 ChordRest* ocr = toChordRest(oe);
 
-                Segment* endSeg = tick2segmentMM(ocr->segment()->tick() + ocr->actualTicks());
+                Segment* endSeg = tick2segmentMM(ocr->segment()->tick() + ocr->actualTicks(), true);
                 if (!endSeg) {
                     endSeg = ocr->segment()->next();
                 }
@@ -4026,7 +4075,10 @@ void MasterScore::setPos(POS pos, Fraction tick)
     if (tick < Fraction(0,1)) {
         tick = Fraction(0,1);
     }
-    Q_ASSERT(tick <= lastMeasure()->endTick());
+    if (tick > lastMeasure()->endTick()) {
+        // End Reverb may last longer than written notation, but cursor position should not
+        tick = lastMeasure()->endTick();
+    }
 
     _pos[int(pos)] = tick;
     // even though tick position might not have changed, layout might have
@@ -4155,27 +4207,61 @@ ChordRest* Score::findCRinStaff(const Fraction& tick, int staffIdx) const
 
 ChordRest* Score::cmdNextPrevSystem(ChordRest* cr, bool next)
 {
-    auto currentMeasure       = cr->measure();
-    auto currentSystem        = currentMeasure->system();
-    auto destinationMeasure   = currentSystem->firstMeasure();
-    auto firstSegmentOfSystem = destinationMeasure->first();
+    auto newCR = cr;
+    auto currentMeasure = cr->measure();
+    auto currentSystem = currentMeasure->system() ? currentMeasure->system() : currentMeasure->mmRest1()->system();
+    if (!currentSystem) {
+        return cr;
+    }
+    auto destinationMeasure = currentSystem->firstMeasure();
+    auto firstSegment = destinationMeasure->first(SegmentType::ChordRest);
 
+    // Case: Go to next system
     if (next) {
-        // [go to next system]
         if ((destinationMeasure = currentSystem->lastMeasure()->nextMeasure())) {
-            firstSegmentOfSystem = destinationMeasure->first();
-            cr = firstSegmentOfSystem->nextChordRest(trackZeroVoice(cr->track()), false);
-        } else if (currentMeasure != lastMeasure()) {
-            cr = lastMeasure()->first()->nextChordRest(trackZeroVoice(cr->track()), false);
-        } else {
-            // [go to previous system]
-            auto currentSegment = cr->segment();
-            auto segmentOfFirstCR = firstSegmentOfSystem->nextChordRest(trackZeroVoice(cr->track()), false)->segment();
-            if (destinationMeasure != firstMeasure() && currentSegment == segmentOfFirstCR) {
-                destinationMeasure = destinationMeasure->prevMeasure()->system()->firstMeasure();
+            // There is a next system present: get it and accommodate for MMRest
+            currentSystem = destinationMeasure->system() ? destinationMeasure->system() : destinationMeasure->mmRest1()->system();
+            if ((destinationMeasure = currentSystem->firstMeasure())) {
+                if ((newCR = destinationMeasure->first()->nextChordRest(trackZeroVoice(cr->track()), false))) {
+                    cr = newCR;
+                }
             }
-            if (destinationMeasure) {
-                cr = destinationMeasure->first()->nextChordRest(trackZeroVoice(cr->track()), false);
+        } else if (currentMeasure != lastMeasure()) {
+            // There is no next system present: go to last measure of current system
+            if ((destinationMeasure = lastMeasure())) {
+                if ((newCR = destinationMeasure->first()->nextChordRest(trackZeroVoice(cr->track()), false))) {
+                    if (!destinationMeasure->isMMRest()) {
+                        cr = newCR;
+                    }
+                    // Last visual measure is a MMRest: go to very last measure within that MMRest
+                    else if ((destinationMeasure = lastMeasureMM())
+                             && (newCR = destinationMeasure->first()->nextChordRest(trackZeroVoice(cr->track()), false))) {
+                        cr = newCR;
+                    }
+                }
+            }
+        }
+    }
+    // Case: Go to previous system
+    else {
+        auto currentSegment = cr->segment();
+        // Only go to previous system's beginning if user is already at the absolute beginning of current system
+        // and not in first measure of entire score
+        if ((destinationMeasure != firstMeasure() && destinationMeasure != firstMeasureMM())
+            && (currentSegment == firstSegment || (currentMeasure->mmRest() && currentMeasure->mmRest()->isFirstInSystem()))) {
+            if (!(destinationMeasure = destinationMeasure->prevMeasure())) {
+                if (!(destinationMeasure = destinationMeasure->prevMeasureMM())) {
+                    return cr;
+                }
+            }
+            if (!(currentSystem = destinationMeasure->system() ? destinationMeasure->system() : destinationMeasure->mmRest1()->system())) {
+                return cr;
+            }
+            destinationMeasure = currentSystem->firstMeasure();
+        }
+        if (destinationMeasure) {
+            if ((newCR = destinationMeasure->first()->nextChordRest(trackZeroVoice(cr->track()), false))) {
+                cr = newCR;
             }
         }
     }
@@ -4259,10 +4345,14 @@ Measure* Score::firstTrailingMeasure(ChordRest** cr)
 ChordRest* Score::cmdTopStaff(ChordRest* cr)
 {
     // Go to top-most staff of current or first measure depending upon active selection
-    if (!cr) {
-        cr = firstMeasure()->first()->nextChordRest(0, false);
-    } else {
-        cr = cr->measure()->first()->nextChordRest(0, false);
+    const auto* destinationMeasure = cr ? cr->measure() : firstMeasure();
+    if (destinationMeasure) {
+        // Accommodate for MMRest
+        if (score()->styleB(Sid::createMultiMeasureRests) && destinationMeasure->hasMMRest()) {
+            destinationMeasure = destinationMeasure->mmRest1();
+        }
+        // Get first ChordRest of top staff
+        cr = destinationMeasure->first()->nextChordRest(0, false);
     }
     return cr;
 }
@@ -4477,8 +4567,7 @@ int Score::duration()
 
 int Score::durationWithoutRepeats()
 {
-    masterScore()->setExpandRepeats(false);
-    const RepeatList& rl = repeatList();
+    const RepeatList& rl = repeatList2();
     if (rl.empty()) {
         return 0;
     }
@@ -4843,6 +4932,7 @@ MasterScore::MasterScore()
     _tempomap    = new TempoMap;
     _sigmap      = new TimeSigMap();
     _repeatList  = new RepeatList(this);
+    _repeatList2 = new RepeatList(this);
     _revisions   = new Revisions;
     setMasterScore(this);
 
@@ -4885,6 +4975,7 @@ MasterScore::~MasterScore()
 {
     delete _revisions;
     delete _repeatList;
+    delete _repeatList2;
     delete _sigmap;
     delete _tempomap;
     qDeleteAll(_excerpts);
@@ -5176,7 +5267,7 @@ bool Score::isTopScore() const
 //---------------------------------------------------------
 
 Movements::Movements()
-    : std::vector<MasterScore*>(), _headersText(MAX_HEADERS, nullptr), _footersText(MAX_FOOTERS, nullptr)
+    : std::vector<MasterScore*>()
 {
     _undo = new UndoStack();
 }

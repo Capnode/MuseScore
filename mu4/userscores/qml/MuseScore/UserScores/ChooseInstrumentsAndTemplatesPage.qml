@@ -5,6 +5,7 @@ import QtQuick.Layouts 1.3
 import MuseScore.Ui 1.0
 import MuseScore.UiComponents 1.0
 import MuseScore.UserScores 1.0
+import MuseScore.Instruments 1.0
 
 Item {
     id: root
@@ -25,7 +26,7 @@ Item {
             isCurrent: bar.currentIndex === 0
         }
         StyledTabButton {
-            text: qsTrc("appshell", "Choose from template")
+            text: qsTrc("userscores", "Choose from template")
             sideMargin: 22
             isCurrent: bar.currentIndex === 1
         }
@@ -41,10 +42,8 @@ Item {
 
         currentIndex: bar.currentIndex
 
-        Rectangle {
+        ChooseInstrumentsPage {
             anchors.fill: parent
-
-            color: "green"
         }
 
         Rectangle {

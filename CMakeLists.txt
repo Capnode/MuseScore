@@ -165,7 +165,13 @@ set(CRASH_REPORT_URL "http://127.0.0.1:1127/post" CACHE STRING "URL where to sen
 option(BUILD_TELEMETRY_MODULE "Build with telemetry module" ON)
 set(TELEMETRY_TRACK_ID "" CACHE STRING "Telemetry track id")
 option(BUILD_UI_MU4 "Build Modern UI MuseScore 4" OFF)
+option(BUILD_UI_MU4_WITH_MU3 "Build Modern UI MuseScore 4 and MU3 source code" OFF)
 option(BUILD_UNIT_TESTS "Build gtest unit test" OFF)
+option(QML_LOAD_FROM_SOURCE "Load qml files from source (not resource)" OFF)
+
+SET(VST3_SDK_VERSION "3.7")
+option(BUILD_VST "Build VST MODULE" OFF)
+set(VST3_SDK_PATH "" CACHE PATH "Path to VST3_SDK. SDK version >= ${VST3_SDK_VERSION} required")
 
 add_definitions(-DQT_QML_DEBUG)
 
@@ -789,7 +795,19 @@ if (OMR)
  endif (NOT USE_SYSTEM_POPPLER)
 endif (OMR)
 
-add_subdirectory(mscore)
+set (BUILD_MU3 OFF)
+if (BUILD_UI_MU4)
+    if (BUILD_UI_MU4_WITH_MU3)
+        set (BUILD_MU3 ON)
+    endif(BUILD_UI_MU4_WITH_MU3)
+else (BUILD_UI_MU4)
+    set (BUILD_MU3 ON)
+endif(BUILD_UI_MU4)
+
+if (BUILD_MU3)
+    add_subdirectory(mscore)
+endif(BUILD_MU3)
+
 add_subdirectory(main)
 
 if (BUILD_CRASH_REPORTER)
@@ -810,55 +828,61 @@ configure_file (
 ##
 ## Add subdirs
 ##
-add_subdirectory(effects)
-add_subdirectory(audio)
+
+if (BUILD_MU3)
+    add_subdirectory(bww2mxml)
+    add_subdirectory(effects)
+    add_subdirectory(audio)
+
+
+    if (BUILD_CRASH_REPORTER)
+          set(ENABLE_CRASH_REPORTER OFF CACHE BOOL "Disable libcrashreporter-qt GUI component")
+          add_subdirectory(thirdparty/libcrashreporter-qt)
+    endif (BUILD_CRASH_REPORTER)
+
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE)
+    if (APPLE AND CMAKE_BUILD_TYPE MATCHES "DEBUG")
+    # With xcode, we need to have all the targets in the same project
+    add_subdirectory(mtest)
+    else(APPLE AND CMAKE_BUILD_TYPE MATCHES "DEBUG")
+    add_subdirectory(mtest EXCLUDE_FROM_ALL)
+    endif(APPLE AND CMAKE_BUILD_TYPE MATCHES "DEBUG")
+
+    add_subdirectory(rdoc EXCLUDE_FROM_ALL)
+    add_subdirectory(miditools EXCLUDE_FROM_ALL)
+    add_subdirectory(fonttools EXCLUDE_FROM_ALL)
+    add_subdirectory(demos)
+
+    if (USE_PORTMIDI AND (MINGW OR APPLE OR MSVC))
+          add_subdirectory(thirdparty/portmidi)
+    endif (USE_PORTMIDI AND (MINGW OR APPLE OR MSVC))
+
+    if (AEOLUS)
+          add_subdirectory(aeolus)
+    endif (AEOLUS)
+
+    if (AVSOMR)
+        add_subdirectory(avsomr)
+    endif (AVSOMR)
+
+    if (OMR)
+          add_subdirectory(omr)
+          if (NOT USE_SYSTEM_POPPLER)
+                add_subdirectory(thirdparty/poppler)
+          endif (NOT USE_SYSTEM_POPPLER)
+    endif (OMR)
+
+    if (OSC)
+          add_subdirectory(thirdparty/ofqf)
+    endif (OSC)
+
+endif(BUILD_MU3)
+
+add_subdirectory(awl)
 add_subdirectory(audiofile)
-
-subdirs(
-      awl bww2mxml share libmscore
-      thirdparty/qzip
-      )
-
-if (BUILD_CRASH_REPORTER)
-      set(ENABLE_CRASH_REPORTER OFF CACHE BOOL "Disable libcrashreporter-qt GUI component")
-      add_subdirectory(thirdparty/libcrashreporter-qt)
-endif (BUILD_CRASH_REPORTER)
-
-string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE)
-if (APPLE AND CMAKE_BUILD_TYPE MATCHES "DEBUG")
-# With xcode, we need to have all the targets in the same project
-add_subdirectory(mtest)
-else(APPLE AND CMAKE_BUILD_TYPE MATCHES "DEBUG")
-add_subdirectory(mtest EXCLUDE_FROM_ALL)
-endif(APPLE AND CMAKE_BUILD_TYPE MATCHES "DEBUG")
-
-add_subdirectory(rdoc EXCLUDE_FROM_ALL)
-add_subdirectory(miditools EXCLUDE_FROM_ALL)
-add_subdirectory(fonttools EXCLUDE_FROM_ALL)
-add_subdirectory(demos)
-
-if (USE_PORTMIDI AND (MINGW OR APPLE OR MSVC))
-      add_subdirectory(thirdparty/portmidi)
-endif (USE_PORTMIDI AND (MINGW OR APPLE OR MSVC))
-
-if (AEOLUS)
-      add_subdirectory(aeolus)
-endif (AEOLUS)
-
-if (AVSOMR)
-    add_subdirectory(avsomr)
-endif (AVSOMR)
-
-if (OMR)
-      add_subdirectory(omr)
-      if (NOT USE_SYSTEM_POPPLER)
-            add_subdirectory(thirdparty/poppler)
-      endif (NOT USE_SYSTEM_POPPLER)
-endif (OMR)
-
-if (OSC)
-      add_subdirectory(thirdparty/ofqf)
-endif (OSC)
+add_subdirectory(share)
+add_subdirectory(libmscore)
+add_subdirectory(thirdparty/qzip)
 
 if (NOT USE_SYSTEM_FREETYPE)
       add_subdirectory(thirdparty/freetype)
@@ -943,10 +967,10 @@ add_subdirectory(global) #todo remove
 if (BUILD_UI_MU4)
     add_subdirectory(mu4)
 else(BUILD_UI_MU4)
-    add_subdirectory(mu4/domain/importexport)
-    add_subdirectory(mu4/scenes/common)
-    add_subdirectory(mu4/scenes/inspector)
-    add_subdirectory(mu4/scenes/palette)
+    add_subdirectory(mu4/importexport)
+    add_subdirectory(mu4/commonscene)
+    add_subdirectory(mu4/inspector)
+    add_subdirectory(mu4/palette)
     add_subdirectory(mu4/cloud)
 endif(BUILD_UI_MU4)
 

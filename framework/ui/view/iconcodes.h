@@ -43,6 +43,7 @@ class IconCode
 public:
     enum class Code : char16_t {
         LIST_ADD = 0xE811,
+        TRASH = 0xE812,
         SMALL_ARROW_UP = 0xEF10,
         SMALL_ARROW_RIGHT = 0xEF11,
         SMALL_ARROW_DOWN = 0xEF12,
@@ -192,6 +193,12 @@ public:
         GUITAR_BEND = 0xF353,
         MULTIMEASURE_REST = 0xF355,
         GUITAR_TREMOLO_BAR = 0xF35C,
+
+        TREMOLO_ONE_NOTE = 0xF361,
+        TREMOLO_TWO_NOTES = 0xF35F,
+        TREMOLO_STYLE_DEFAULT = 0xF35F,
+        TREMOLO_STYLE_ALL_STROKES_ATTACHED = 0xF360,
+        TREMOLO_STYLE_SINGLE_STROKE_ATTACHED = 0xF362,
 
         AUTO,
         NONE,

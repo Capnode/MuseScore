@@ -24,25 +24,25 @@
 
 #include "itemplatesrepository.h"
 #include "userscores/iuserscoresconfiguration.h"
-#include "domain/notation/imsczmetareader.h"
-#include "system/ifsoperations.h"
+#include "notation/imsczmetareader.h"
+#include "system/ifilesystem.h"
 
 namespace mu {
 namespace userscores {
 class TemplatesRepository : public ITemplatesRepository
 {
     INJECT(userscores, IUserScoresConfiguration, configuration)
-    INJECT(userscores, domain::notation::IMsczMetaReader, msczReader)
-    INJECT(userscores, framework::IFsOperations, fsOperations)
+    INJECT(userscores, notation::IMsczMetaReader, msczReader)
+    INJECT(userscores, framework::IFileSystem, fileSystem)
 
 public:
     RetVal<TemplateCategoryList> categories() const override;
-    RetVal<domain::notation::MetaList> templatesMeta(const QString& categoryCode) const override;
+    RetVal<notation::MetaList> templatesMeta(const QString& categoryCode) const override;
 
 private:
-    bool isEmpty(const QString& dirPath) const;
+    bool isEmpty(const io::path& dirPath) const;
     QString correctedTitle(const QString& title) const;
-    QStringList templatesPaths(const QString& dirPath) const;
+    io::paths templatesPaths(const io::path& dirPath) const;
 };
 }
 }

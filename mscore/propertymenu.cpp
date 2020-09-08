@@ -189,7 +189,10 @@ void ScoreView::createElementPropertyMenu(Element* e, QMenu* popup)
         genPropertyMenuText(e, popup);
     } else if (e->isHarmony()) {
         genPropertyMenu1(e, popup);
-        popup->addAction(getAction("realize-chord-symbols"));
+        QAction* a = getAction("realize-chord-symbols");
+        if (a) {
+            popup->addAction(a->text())->setData("realize-chord-symbols-dialog");
+        }
     } else if (e->isTempoText()) {
         genPropertyMenu1(e, popup);
     } else if (e->isKeySig()) {
@@ -280,7 +283,7 @@ void ScoreView::elementPropertyAction(const QString& cmd, Element* e)
             vp.exec();
         }
     } else if (cmd == "picture") {
-        mscore->addImage(score(), toHBox(e));
+        mscore->addImage(score(), e);
     } else if (cmd == "frame-text") {
         Text* t = new Text(score(), Tid::FRAME);
         t->setParent(e);

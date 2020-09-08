@@ -57,6 +57,8 @@
 #include "audio/midi/event.h"
 #include "mscore/preferences.h"
 
+#include "log.h"
+
 namespace Ms {
 //int printNoteEventLists(NoteEventList el, int prefix, int j){
 //    int k=0;
@@ -367,9 +369,13 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
     // Find any changes, and apply events
     if (config.useSND) {
         ChangeMap& veloEvents = staff->velocities();
+        ChangeMap& multEvents = staff->velocityMultiplications();
         Fraction stick = chord->tick();
         Fraction etick = stick + chord->ticks();
         auto changes = veloEvents.changesInRange(stick, etick);
+        auto multChanges = multEvents.changesInRange(stick, etick);
+
+        std::map<int, int> velocityMap;
         for (auto& change : changes) {
             int lastVal = -1;
             int endPoint = change.second.ticks();
@@ -380,14 +386,44 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                 }
                 lastVal = velo;
 
-                // NOTE:JT if we ever want to use poly aftertouch instead of CC, this is where we want to
-                // be using it. Instead of ME_CONTROLLER, use ME_POLYAFTER (but duplicate for each note in chord)
-                NPlayEvent event
-                    = NPlayEvent(ME_CONTROLLER, channel, config.controller,
-                                 qBound(1, int(velo * velocityMultiplier), 127));
-                event.setOriginatingStaff(staffIdx);
-                events->insert(std::make_pair(t + tickOffset, event));
+                velocityMap[t] = velo;
             }
+        }
+
+        qreal CONVERSION_FACTOR = MidiRenderer::ARTICULATION_CONV_FACTOR;
+        for (auto& change : multChanges) {
+            // Ignore fix events: they are available as cached ramp starts
+            // and considering them ends up with multiplying twice effectively
+            if (change.first == change.second) {
+                continue;
+            }
+
+            int lastVal = MidiRenderer::ARTICULATION_CONV_FACTOR;
+            int endPoint = change.second.ticks();
+            int lastVelocity = velocityMap.upper_bound(change.first.ticks())->second;
+            for (int t = change.first.ticks(); t <= endPoint; t++) {
+                int mult = multEvents.val(Fraction::fromTicks(t));
+                if (mult == lastVal || mult == CONVERSION_FACTOR) {
+                    continue;
+                }
+                lastVal = mult;
+
+                qreal realMult = mult / CONVERSION_FACTOR;
+                if (velocityMap.find(t) != velocityMap.end()) {
+                    lastVelocity = velocityMap[t];
+                    velocityMap[t] *= realMult;
+                } else {
+                    velocityMap[t] = lastVelocity * realMult;
+                }
+            }
+        }
+
+        for (auto point = velocityMap.cbegin(); point != velocityMap.cend(); ++point) {
+            // NOTE:JT if we ever want to use poly aftertouch instead of CC, this is where we want to
+            // be using it. Instead of ME_CONTROLLER, use ME_POLYAFTER (but duplicate for each note in chord)
+            NPlayEvent event = NPlayEvent(ME_CONTROLLER, channel, config.controller, qBound(0, point->second, 127));
+            event.setOriginatingStaff(staffIdx);
+            events->insert(std::make_pair(point->first + tickOffset, event));
         }
     }
 
@@ -483,7 +519,7 @@ static void aeolusSetStop(int tick, int channel, int i, int k, bool val, EventMa
 //   collectProgramChanges
 //---------------------------------------------------------
 
-static void collectProgramChanges(EventMap* events, Measure* m, Staff* staff, int tickOffset)
+static void collectProgramChanges(EventMap* events, Measure const* m, Staff* staff, int tickOffset)
 {
     int firstStaffIdx = staff->idx();
     int nextStaffIdx  = firstStaffIdx + 1;
@@ -567,7 +603,7 @@ static int getControllerFromCC(int cc)
 //    renderHarmony
 ///    renders chord symbols
 //---------------------------------------------------------
-static void renderHarmony(EventMap* events, Measure* m, Harmony* h, int tickOffset)
+static void renderHarmony(EventMap* events, Measure const* m, Harmony* h, int tickOffset)
 {
     if (!h->isRealizable()) {
         return;
@@ -613,7 +649,7 @@ static void renderHarmony(EventMap* events, Measure* m, Harmony* h, int tickOffs
 //    the original, velocity-only method of collecting events.
 //---------------------------------------------------------
 
-void MidiRenderer::collectMeasureEventsSimple(EventMap* events, Measure* m, const StaffContext& sctx, int tickOffset)
+void MidiRenderer::collectMeasureEventsSimple(EventMap* events, Measure const* m, const StaffContext& sctx, int tickOffset)
 {
     int firstStaffIdx = sctx.staff->idx();
     int nextStaffIdx  = firstStaffIdx + 1;
@@ -703,7 +739,7 @@ void MidiRenderer::collectMeasureEventsSimple(EventMap* events, Measure* m, cons
 //          SEG_START - note-on velocity is the same as the start velocity of the seg
 //---------------------------------------------------------
 
-void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure* m, const StaffContext& sctx, int tickOffset)
+void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const* m, const StaffContext& sctx, int tickOffset)
 {
     int controller = getControllerFromCC(sctx.cc);
 
@@ -808,7 +844,7 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure* m, con
 //    redirects to the correct function based on the passed method
 //---------------------------------------------------------
 
-void MidiRenderer::collectMeasureEvents(EventMap* events, Measure* m, const StaffContext& sctx, int tickOffset)
+void MidiRenderer::collectMeasureEvents(EventMap* events, Measure const* m, const StaffContext& sctx, int tickOffset)
 {
     switch (sctx.method) {
     case DynamicsRenderMethod::SIMPLE:
@@ -878,12 +914,13 @@ void Score::updateVelo()
     }
 
     for (Staff* st : _staves) {
-        ChangeMap& velo = st->velocities();
-        velo.clear();
+        st->velocities().clear();
+        st->velocityMultiplications().clear();
     }
     for (int staffIdx = 0; staffIdx < nstaves(); ++staffIdx) {
         Staff* st      = staff(staffIdx);
         ChangeMap& velo = st->velocities();
+        ChangeMap& mult = st->velocityMultiplications();
         Part* prt      = st->part();
         int partStaves = prt->nstaves();
         int partStaff  = Score::staffIdx(prt);
@@ -952,7 +989,40 @@ void Score::updateVelo()
                     break;
                 }
             }
+
+            if (s->isChordRestType()) {
+                for (int i = staffIdx * VOICES; i < (staffIdx + 1) * VOICES; ++i) {
+                    Element* el = s->element(i);
+                    if (!el || !el->isChord()) {
+                        continue;
+                    }
+
+                    Chord* chord = toChord(el);
+                    Instrument* instr = chord->part()->instrument();
+
+                    qreal veloMultiplier = 1;
+                    for (Articulation* a : chord->articulations()) {
+                        if (a->playArticulation()) {
+                            veloMultiplier *= instr->getVelocityMultiplier(a->articulationName());
+                        }
+                    }
+
+                    if (veloMultiplier == 1.0) {
+                        continue;
+                    }
+
+                    // TODO this should be a (configurable?) constant somewhere
+                    static Fraction ARTICULATION_CHANGE_TIME_MAX = Fraction(1, 16);
+                    Fraction ARTICULATION_CHANGE_TIME = qMin(s->ticks(), ARTICULATION_CHANGE_TIME_MAX);
+                    int start = veloMultiplier * MidiRenderer::ARTICULATION_CONV_FACTOR;
+                    int change = (veloMultiplier - 1) * MidiRenderer::ARTICULATION_CONV_FACTOR;
+                    mult.addFixed(chord->tick(), start);
+                    mult.addRamp(chord->tick(),
+                                 chord->tick() + ARTICULATION_CHANGE_TIME, change, ChangeMethod::NORMAL, ChangeDirection::DECREASING);
+                }
+            }
         }
+
         for (const auto& sp : _spanner.map()) {
             Spanner* s = sp.second;
             if (s->type() != ElementType::HAIRPIN || sp.second->staffIdx() != staffIdx) {
@@ -965,6 +1035,7 @@ void Score::updateVelo()
 
     for (Staff* st : _staves) {
         st->velocities().cleanup();
+        st->velocityMultiplications().cleanup();
     }
 
     for (auto it = spanner().cbegin(); it != spanner().cend(); ++it) {
@@ -983,13 +1054,13 @@ void Score::updateVelo()
 
 void MidiRenderer::renderStaffChunk(const Chunk& chunk, EventMap* events, const StaffContext& sctx)
 {
-    Measure* start = chunk.startMeasure();
-    Measure* end = chunk.endMeasure();
+    Measure const* const start = chunk.startMeasure();
+    Measure const* const end = chunk.endMeasure();
     const int tickOffset = chunk.tickOffset();
 
-    Measure* lastMeasure = start->prevMeasure();
+    Measure const* lastMeasure = start->prevMeasure();
 
-    for (Measure* m = start; m != end; m = m->nextMeasure()) {
+    for (Measure const* m = start; m != end; m = m->nextMeasure()) {
         if (lastMeasure && m->isRepeatMeasure(sctx.staff)) {
             int offset = (m->tick() - lastMeasure->tick()).ticks();
             collectMeasureEvents(events, lastMeasure, sctx, tickOffset + offset);
@@ -2185,7 +2256,7 @@ void Score::createPlayEvents(Chord* chord)
     // don't change event list if type is PlayEventType::User
 }
 
-void Score::createPlayEvents(Measure* start, Measure* end)
+void Score::createPlayEvents(Measure const* start, Measure const* const end)
 {
     if (!start) {
         start = firstMeasure();
@@ -2194,7 +2265,7 @@ void Score::createPlayEvents(Measure* start, Measure* end)
     int etrack = nstaves() * VOICES;
     for (int track = 0; track < etrack; ++track) {
         bool rangeEnded = false;
-        for (Measure* m = start; m; m = m->nextMeasure()) {
+        for (Measure const* m = start; m; m = m->nextMeasure()) {
             constexpr SegmentType st = SegmentType::ChordRest;
 
             if (m == end) {
@@ -2242,10 +2313,10 @@ void Score::createPlayEvents(Measure* start, Measure* end)
 void MidiRenderer::renderMetronome(const Chunk& chunk, EventMap* events)
 {
     const int tickOffset = chunk.tickOffset();
-    Measure* start = chunk.startMeasure();
-    Measure* end = chunk.endMeasure();
+    Measure const* const start = chunk.startMeasure();
+    Measure const* const end = chunk.endMeasure();
 
-    for (Measure* m = start; m != end; m = m->nextMeasure()) {
+    for (Measure const* m = start; m != end; m = m->nextMeasure()) {
         renderMetronome(events, m, Fraction::fromTicks(tickOffset));
     }
 }
@@ -2255,7 +2326,7 @@ void MidiRenderer::renderMetronome(const Chunk& chunk, EventMap* events)
 ///   add metronome tick events
 //---------------------------------------------------------
 
-void MidiRenderer::renderMetronome(EventMap* events, Measure* m, const Fraction& tickOffset)
+void MidiRenderer::renderMetronome(EventMap* events, Measure const* m, const Fraction& tickOffset)
 {
     int msrTick         = m->tick().ticks();
     qreal tempo         = score->tempomap()->tempo(msrTick);
@@ -2464,11 +2535,11 @@ void MidiRenderer::updateChunksPartition()
             continue;
         }
 
-        Measure* end = rs->lastMeasure()->nextMeasure();
+        Measure const* const end = rs->lastMeasure()->nextMeasure();
         int count = 0;
         bool needBreak = false;
-        Measure* chunkStart = nullptr;
-        for (Measure* m = rs->firstMeasure(); m != end; m = m->nextMeasure()) {
+        Measure const* chunkStart = nullptr;
+        for (Measure const* m = rs->firstMeasure(); m != end; m = m->nextMeasure()) {
             if (!chunkStart) {
                 chunkStart = m;
             }
@@ -2518,6 +2589,21 @@ MidiRenderer::Chunk MidiRenderer::getChunkAt(int utick)
     if (ch.utick2() <= utick) {
         return Chunk();
     }
+    return ch;
+}
+
+MidiRenderer::Chunk MidiRenderer::chunkAt(int utick)
+{
+    updateState();
+    auto it = std::upper_bound(chunks.begin(), chunks.end(), utick, [](int utick, const Chunk& ch) {
+            return utick <= ch.utick1();
+        });
+
+    if (it == chunks.end()) {
+        return Chunk();
+    }
+
+    const Chunk& ch = *it;
     return ch;
 }
 

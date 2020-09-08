@@ -84,8 +84,7 @@ void ShortcutsRegister::expandStandartKeys(std::list<Shortcut>& shortcuts) const
     }
 
     if (!expanded.empty()) {
-        LOGD() << "added " << expanded.size()
-               << " shortcut, because they are alternative shortcuts for the given standard keys";
+        LOGD() << "added " << expanded.size() << " shortcut, because they are alternative shortcuts for the given standard keys";
 
         shortcuts.splice(shortcuts.end(), expanded);
     }
@@ -93,7 +92,7 @@ void ShortcutsRegister::expandStandartKeys(std::list<Shortcut>& shortcuts) const
 
 bool ShortcutsRegister::loadFromFile(std::list<Shortcut>& shortcuts, const io::path& path) const
 {
-    QFile f(QString::fromStdString(path));
+    QFile f(path.toQString());
     if (!f.exists()) {
         LOGE() << "Not exists shortcuts file: " << path;
         return false;

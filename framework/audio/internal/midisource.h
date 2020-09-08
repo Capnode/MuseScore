@@ -23,7 +23,7 @@
 #include <string>
 #include <memory>
 
-#include "iaudiosource.h"
+#include "../iaudiosource.h"
 
 #include "modularity/ioc.h"
 #include "midi/isequencer.h"
@@ -39,6 +39,7 @@ class MidiSource : public IAudioSource
 public:
 
     MidiSource(const std::string& name = std::string());
+    ~MidiSource();
 
     void setSampleRate(float samplerate) override;
     SoLoud::AudioSource* source() override;
@@ -61,6 +62,7 @@ private:
     std::string m_name;
     std::shared_ptr<SL> m_sl;
     std::shared_ptr<midi::ISequencer> m_seq;
+    std::shared_ptr<midi::ISequencer::Context> m_seqContext;
 };
 }
 }

@@ -367,6 +367,7 @@ bool Score::pasteStaff(XmlReader& e, Segment* dst, int dstStaff, Fraction scale)
                            || tag == "StaffText"
                            || tag == "TempoText"
                            || tag == "FiguredBass"
+                           || tag == "Sticking"
                            || tag == "Fermata"
                            ) {
                     Element* el = Element::name2Element(tag, this);
@@ -401,8 +402,9 @@ bool Score::pasteStaff(XmlReader& e, Segment* dst, int dstStaff, Fraction scale)
                     undoChangeElement(segment->element(e.track()), clef);
                 } else if (tag == "Breath") {
                     Breath* breath = new Breath(this);
-                    breath->read(e);
                     breath->setTrack(e.track());
+                    breath->setPlacement(breath->track() & 1 ? Placement::BELOW : Placement::ABOVE);
+                    breath->read(e);
                     Fraction tick = doScale ? (e.tick() - dstTick) * scale + dstTick : e.tick();
                     Measure* m = tick2measure(tick);
                     if (m->tick() == tick) {
@@ -574,15 +576,31 @@ void Score::pasteChordRest(ChordRest* cr, const Fraction& t, const Interval& src
 {
     Fraction tick(t);
 // qDebug("pasteChordRest %s at %d, len %d/%d", cr->name(), tick, cr->ticks().numerator(), cr->ticks().denominator() );
-    if (cr->isChord()) {
-        transposeChord(toChord(cr), srcTranspose, tick);
-    }
 
     Measure* measure = tick2measure(tick);
     if (!measure) {
         return;
     }
 
+    int twoNoteTremoloFactor = 1;
+    if (cr->isChord()) {
+        transposeChord(toChord(cr), srcTranspose, tick);
+        if (toChord(cr)->tremolo() && toChord(cr)->tremolo()->twoNotes()) {
+            twoNoteTremoloFactor = 2;
+        } else if (cr->durationTypeTicks() == (cr->actualTicks() * 2)) {
+            // this could be the 2nd note of a two-note tremolo
+            // check previous CR on same track, if it has a two-note tremolo, then set twoNoteTremoloFactor to 2
+            Segment* seg = measure->undoGetSegment(SegmentType::ChordRest, tick);
+            ChordRest* crt = seg->nextChordRest(cr->track(), true);
+            if (crt && crt->isChord()) {
+                Chord* chrt = toChord(crt);
+                Tremolo* tr = chrt->tremolo();
+                if (tr && tr->twoNotes()) {
+                    twoNoteTremoloFactor = 2;
+                }
+            }
+        }
+    }
     // we can paste a measure rest as such only at start of measure
     // and only if the lengths of the rest and measure match
     // otherwise, we need to convert to duration rest(s)
@@ -598,7 +616,7 @@ void Score::pasteChordRest(ChordRest* cr, const Fraction& t, const Interval& src
     if (cr->isRepeatMeasure()) {
         partialCopy = toRepeatMeasure(cr)->actualTicks() != measure->ticks();
     } else if (!isGrace && !cr->tuplet()) {
-        partialCopy = cr->durationTypeTicks() != cr->actualTicks();
+        partialCopy = cr->durationTypeTicks() != (cr->actualTicks() * twoNoteTremoloFactor);
     }
 
     // if note is too long to fit in measure, split it up with a tie across the barline
@@ -843,6 +861,16 @@ void Score::pasteSymbols(XmlReader& e, ChordRest* dst)
                         el->setTrack(destTrack);
                         el->setParent(cr);
                         if (!el->isFermata() && cr->isRest()) {
+                            delete el;
+                        } else {
+                            undoAddElement(el);
+                        }
+                    } else if (tag == "StaffText" || tag == "Sticking") {
+                        Element* el = Element::name2Element(tag, this);
+                        el->read(e);
+                        el->setTrack(destTrack);
+                        el->setParent(currSegm);
+                        if (el->isSticking() && cr->isRest()) {
                             delete el;
                         } else {
                             undoAddElement(el);

@@ -49,10 +49,10 @@ include_directories(
       ${PROJECT_SOURCE_DIR}/importexport
       ${PROJECT_BINARY_DIR}
       ${QTSINGLEAPPLICATION_INCLUDE_DIRS}
-      ${PROJECT_SOURCE_DIR}/mu4/scenes/palette/internal
-      ${PROJECT_SOURCE_DIR}/mu4/scenes/palette/internal/widgets
-      ${PROJECT_BINARY_DIR}/mu4/scenes/palette
-      ${PROJECT_SOURCE_DIR}/mu4/scenes/inspector
+      ${PROJECT_SOURCE_DIR}/mu4/palette/internal
+      ${PROJECT_SOURCE_DIR}/mu4/palette/internal/widgets
+      ${PROJECT_BINARY_DIR}/mu4/palette
+      ${PROJECT_SOURCE_DIR}/mu4/inspector
       ${PROJECT_SOURCE_DIR}/mu4/cloud/internal
       )
 
@@ -122,24 +122,10 @@ else (APPLE)
             find_package(Qt5QuickCompiler)
             qtquick_compiler_add_resources (qrc_files musescore.qrc
                   qml.qrc
-                  musescorefonts-MScore.qrc
-                  musescorefonts-Gootville.qrc
-                  musescorefonts-Bravura.qrc
-                  musescorefonts-MuseJazz.qrc
-                  musescorefonts-Campania.qrc
-                  musescorefonts-FreeSerif.qrc
-                  musescorefonts-Free.qrc
                   shortcut.qrc)
       else (Qt5Widgets_VERSION VERSION_GREATER_EQUAL "5.11.0")
             QT5_ADD_RESOURCES (qrc_files musescore.qrc
                   qml.qrc
-                  musescorefonts-MScore.qrc
-                  musescorefonts-Gootville.qrc
-                  musescorefonts-Bravura.qrc
-                  musescorefonts-MuseJazz.qrc
-                  musescorefonts-Campania.qrc
-                  musescorefonts-FreeSerif.qrc
-                  musescorefonts-Free.qrc
                   shortcut.qrc)
       endif (Qt5Widgets_VERSION VERSION_GREATER_EQUAL "5.11.0")
 endif (APPLE)
@@ -322,7 +308,7 @@ target_link_libraries(mscoreapp
       qzip
       importexport
       palette
-      common_scene
+      commonscene
       cloud
       )
 

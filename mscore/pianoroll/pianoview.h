@@ -23,8 +23,9 @@ class Chord;
 class ChordRest;
 class Note;
 class NoteEvent;
-class PianoView;
 class NoteTweakerDialog;
+class PianoView;
+class Segment;
 
 enum class NoteSelectType {
     REPLACE = 0,
@@ -123,12 +124,13 @@ private:
     virtual void drawBackground(QPainter* painter, const QRectF& rect);
 
     void addChord(Chord* _chord, int voice);
+    QVector<Note*> getSegmentNotes(Segment* seg, int track);
     void updateBoundingSize();
     void clearNoteData();
     void selectNotes(int startTick, int endTick, int lowPitch, int highPitch, NoteSelectType selType);
     void showPopupMenu(const QPoint& pos);
     bool cutChordRest(ChordRest* targetCr, int track, Fraction cutTick, ChordRest*& cr0, ChordRest*& cr1);
-    void addNote(Fraction startTick, Fraction duration, int pitch, int track, bool command = true);
+    QVector<Note*> addNote(Fraction startTick, Fraction duration, int pitch, int track);
     void handleSelectionClick();
     void insertNote(int modifiers);
     Fraction roundToStartBeat(int tick) const;
@@ -141,6 +143,12 @@ private:
     void toggleTie(Note*);
     void dragSelectionNoteGroup();
     void finishNoteGroupDrag();
+    bool toolCanDragNotes() const
+    {
+        return _editNoteTool == PianoRollEditTool::SELECT || _editNoteTool == PianoRollEditTool::INSERT_NOTE
+               || _editNoteTool == PianoRollEditTool::APPEND_NOTE || _editNoteTool == PianoRollEditTool::CUT_CHORD
+               || _editNoteTool == PianoRollEditTool::TIE;
+    }
 
     QAction* getAction(const char* id);
 

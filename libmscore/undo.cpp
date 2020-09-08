@@ -152,7 +152,7 @@ void UndoCommand::undo(EditData* ed)
 {
     int n = childList.size();
     for (int i = n - 1; i >= 0; --i) {
-        qCDebug(undoRedo) << "<" << childList[i]->name() << ">";
+        qDebug() << "<" << childList[i]->name() << ">";
         childList[i]->undo(ed);
     }
     flip(ed);
@@ -166,7 +166,7 @@ void UndoCommand::redo(EditData* ed)
 {
     int n = childList.size();
     for (int i = 0; i < n; ++i) {
-        qCDebug(undoRedo) << "<" << childList[i]->name() << ">";
+        qDebug() << "<" << childList[i]->name() << ">";
         childList[i]->redo(ed);
     }
     flip(ed);
@@ -309,9 +309,9 @@ void UndoStack::push(UndoCommand* cmd, EditData* ed)
 #ifndef QT_NO_DEBUG
     if (!strcmp(cmd->name(), "ChangeProperty")) {
         ChangeProperty* cp = static_cast<ChangeProperty*>(cmd);
-        qCDebug(undoRedo, "<%s> id %d %s", cmd->name(), int(cp->getId()), propertyName(cp->getId()));
+        qDebug("<%s> id %d %s", cmd->name(), int(cp->getId()), propertyName(cp->getId()));
     } else {
-        qCDebug(undoRedo, "<%s>", cmd->name());
+        qDebug("<%s>", cmd->name());
     }
 #endif
     curCmd->appendChild(cmd);
@@ -467,7 +467,7 @@ void UndoStack::setClean()
 
 void UndoStack::undo(EditData* ed)
 {
-    qCDebug(undoRedo) << "===";
+    qDebug() << "===";
     // Are we currently editing text?
     if (ed && ed->element && ed->element->isTextBase()) {
         TextEditData* ted = static_cast<TextEditData*>(ed->getData(ed->element));
@@ -489,7 +489,7 @@ void UndoStack::undo(EditData* ed)
 
 void UndoStack::redo(EditData* ed)
 {
-    qCDebug(undoRedo) << "===";
+    qDebug() << "===";
     if (canRedo()) {
         list[curIdx++]->redo(ed);
     }
@@ -1559,7 +1559,8 @@ void SetUserBankController::flip(EditData*)
 //---------------------------------------------------------
 
 ChangeStaff::ChangeStaff(Staff* _staff,  bool _invisible, ClefTypeList _clefType,
-                         qreal _userDist, Staff::HideMode _hideMode, bool _showIfEmpty, bool _cutaway, bool hide)
+                         qreal _userDist, Staff::HideMode _hideMode, bool _showIfEmpty, bool _cutaway,
+                         bool _hideSystemBarLine, bool _mergeMatchingRests)
 {
     staff       = _staff;
     invisible   = _invisible;
@@ -1568,7 +1569,8 @@ ChangeStaff::ChangeStaff(Staff* _staff,  bool _invisible, ClefTypeList _clefType
     hideMode    = _hideMode;
     showIfEmpty = _showIfEmpty;
     cutaway     = _cutaway;
-    hideSystemBarLine = hide;
+    hideSystemBarLine  = _hideSystemBarLine;
+    mergeMatchingRests = _mergeMatchingRests;
 }
 
 //---------------------------------------------------------
@@ -1584,7 +1586,8 @@ void ChangeStaff::flip(EditData*)
     Staff::HideMode oldHideMode    = staff->hideWhenEmpty();
     bool oldShowIfEmpty = staff->showIfEmpty();
     bool oldCutaway     = staff->cutaway();
-    bool hide           = staff->hideSystemBarLine();
+    bool oldHideSystemBarLine  = staff->hideSystemBarLine();
+    bool oldMergeMatchingRests = staff->mergeMatchingRests();
 
     staff->setInvisible(invisible);
     staff->setDefaultClefType(clefType);
@@ -1600,7 +1603,8 @@ void ChangeStaff::flip(EditData*)
     hideMode    = oldHideMode;
     showIfEmpty = oldShowIfEmpty;
     cutaway     = oldCutaway;
-    hideSystemBarLine = hide;
+    hideSystemBarLine  = oldHideSystemBarLine;
+    mergeMatchingRests = oldMergeMatchingRests;
 
     Score* score = staff->score();
     if (invisibleChanged) {
@@ -1685,7 +1689,7 @@ void ChangeStyle::flip(EditData*)
     MStyle tmp = score->style();
 
     if (score->styleV(Sid::concertPitch) != style.value(Sid::concertPitch)) {
-        score->cmdConcertPitchChanged(style.value(Sid::concertPitch).toBool(), true);
+        score->cmdConcertPitchChanged(style.value(Sid::concertPitch).toBool());
     }
     if (score->styleV(Sid::MusicalSymbolFont) != style.value(Sid::MusicalSymbolFont)) {
         score->setScoreFont(ScoreFont::fontFactory(style.value(Sid::MusicalSymbolFont).toString()));
@@ -2258,8 +2262,7 @@ void MoveStaff::flip(EditData*)
 
 void ChangeProperty::flip(EditData*)
 {
-    qCDebug(undoRedo) << element->name() << int(id) << "(" << propertyName(id) << ")" << element->getProperty(id)
-                      << "->" << property;
+    qDebug() << element->name() << int(id) << "(" << propertyName(id) << ")" << element->getProperty(id) << "->" << property;
 
     QVariant v       = element->getProperty(id);
     PropertyFlags ps = element->propertyFlags(id);
@@ -2337,7 +2340,7 @@ void ChangeSpannerElements::flip(EditData*)
     Element* oldEndElement     = spanner->endElement();
     if (spanner->anchor() == Spanner::Anchor::NOTE) {
         // be sure new spanner elements are of the right type
-        if (!startElement->isNote() || !endElement->isNote()) {
+        if (!startElement || !startElement->isNote() || !endElement || !endElement->isNote()) {
             return;
         }
         Note* oldStartNote = toNote(oldStartElement);

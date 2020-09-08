@@ -2188,6 +2188,7 @@ void Measure::readVoice(XmlReader& e, int staffIdx, bool irregular)
         } else if (tag == "Breath") {
             Breath* breath = new Breath(score());
             breath->setTrack(e.track());
+            breath->setPlacement(breath->track() & 1 ? Placement::BELOW : Placement::ABOVE);
             breath->read(e);
             segment = getSegment(SegmentType::Breath, e.tick());
             segment->add(breath);
@@ -3430,7 +3431,7 @@ void Measure::stretchMeasure(qreal targetWidth)
         while (s && !s->enabled()) {
             s = s->next();
         }
-        qreal x = s->pos().x();
+        qreal x = s ? s->pos().x() : 0.0;
         while (s) {
             s->rxpos() = x;
             x += s->width();

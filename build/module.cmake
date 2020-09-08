@@ -36,7 +36,7 @@ message(STATUS "Configuring " ${MODULE})
 set(LIBRARY_TYPE STATIC)
 set(_all_h_file "${PROJECT_SOURCE_DIR}/all.h")
 
-if (NOT ${MODULE_QRC} STREQUAL "")
+if (MODULE_QRC)
     qt5_add_resources(RCC_SOURCES ${MODULE_QRC})
 endif()
 
@@ -66,13 +66,23 @@ target_include_directories(${MODULE} PUBLIC
     ${MODULE_INCLUDE}
 )
 
+string(TOLOWER ${CMAKE_BUILD_TYPE} build_mode )
+if (build_mode STREQUAL "debug")
+    set(MODULE_DEF ${MODULE_DEF} -D_DEBUG)
+else()
+    set(MODULE_DEF ${MODULE_DEF} -DNDEBUG)
+endif()
+
 target_compile_definitions(${MODULE} PUBLIC
     ${MODULE_DEF}
+    ${MODULE}_QML_IMPORT="${MODULE_QML_IMPORT}"
 )
 
-if(NOT TARGET global)
+if(NOT ${MODULE} MATCHES global)
     set(MODULE_LINK global ${MODULE_LINK})
 endif()
+
+set(MODULE_LINK ${QT_LIBRARIES} ${MODULE_LINK})
 
 target_link_libraries(${MODULE}
     ${MODULE_LINK}
@@ -102,4 +112,5 @@ else(MODULE_HAS_C_CODE)
     endif (NOT MSVC)
 
 endif()
+
 

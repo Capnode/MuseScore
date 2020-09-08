@@ -31,6 +31,7 @@ public:
         Undefined       = -1,
         Ok              = 0,
         UnknownError    = 1,
+        NotSupported    = 2,
 
         // not error, just codes
         Cancel          = 3,  // abort by user
@@ -67,8 +68,9 @@ public:
 
     Ret() = default;
     Ret(bool arg);
-    Ret(int c);
-    Ret(const int& c, const std::string& text);
+    explicit Ret(int c);
+    explicit Ret(Code c);
+    explicit Ret(const int& c, const std::string& text);
 
     void setCode(int c);
     int code() const;

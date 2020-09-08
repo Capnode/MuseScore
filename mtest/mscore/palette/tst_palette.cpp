@@ -15,8 +15,10 @@
 #include "mtest/testutils.h"
 #include "mscore/musescore.h"
 #include "mscore/workspace.h"
-#include "mu4/scenes/palette/internal/palette/palettemodel.h"
-#include "mu4/scenes/palette/internal/palette/palettetree.h"
+#include "mu4/palette/internal/palette/palettemodel.h"
+#include "mu4/palette/internal/palette/palettetree.h"
+
+#include "globalmodule.h"
 
 using namespace Ms;
 
@@ -108,6 +110,9 @@ void TestPaletteModel::iterateOverModel(QAbstractItemModel* model, QModelIndex p
 
 void TestPaletteModel::initTestCase()
 {
+    mu::framework::GlobalModule global;
+    global.registerExports();
+
     initMuseScore();
 }
 
