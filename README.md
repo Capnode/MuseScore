@@ -1,17 +1,14 @@
 ![MuseScore](mscore/data/musescore_logo_full.png)  
-Music notation and composition software
+Music notation and composition software\
+MuseScore is an open source and free music notation software. For support, contribution, and bug reports visit MuseScore.org. Fork and make pull requests!
 
 ## Piano tutor edition
+[Windows installer](https://github.com/Capnode/MuseScore/releases/download/tutor1.0/MuseScore-4.0.0.git20200909.msi)
+
 Play along with one or both hands on a MIDI keyboard. Musescore waits until correct key is pressed.
 
+
 ![Piano tutor](mscore/data/piano-tutor.png)
-
-
-[![Travis CI](https://secure.travis-ci.org/musescore/MuseScore.svg?branch=master)](https://travis-ci.org/musescore/MuseScore)
-[![Appveyor](https://ci.appveyor.com/api/projects/status/bp3ww6v985i64ece/branch/master?svg=true)](https://ci.appveyor.com/project/MuseScore/musescore/branch/master)
-[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
-
-MuseScore is an open source and free music notation software. For support, contribution, and bug reports visit MuseScore.org. Fork and make pull requests!
 
 ## Features
 
