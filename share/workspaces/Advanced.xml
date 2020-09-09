@@ -3347,6 +3347,6 @@
       <action>repeat</action>
       <action>pan</action>
       <action>metronome</action>
-    </Toolbar>
+      </Toolbar>
     </Workspace>
   </museScore>

@@ -17,8 +17,6 @@
 //  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 //=============================================================================
 
-#include <iostream>
-#include <sstream>
 #include "config.h"
 #include "seq.h"
 #include "musescore.h"
