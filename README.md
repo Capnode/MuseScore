@@ -1,6 +1,12 @@
 ![MuseScore](mscore/data/musescore_logo_full.png)  
 Music notation and composition software
 
+## Piano tutor edition
+Play along with one or both hands on a MIDI keyboard. Musescore waits until correct key is pressed.
+
+![Piano tutor](mscore/data/piano-tutor.png)
+
+
 [![Travis CI](https://secure.travis-ci.org/musescore/MuseScore.svg?branch=master)](https://travis-ci.org/musescore/MuseScore)
 [![Appveyor](https://ci.appveyor.com/api/projects/status/bp3ww6v985i64ece/branch/master?svg=true)](https://ci.appveyor.com/project/MuseScore/musescore/branch/master)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
